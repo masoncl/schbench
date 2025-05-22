@@ -1634,7 +1634,7 @@ static void sleep_for_runtime(struct thread_data *message_threads_mem)
 			last_rps_calc = now;
 
 			if (!auto_rps || auto_rps_target_hit)
-				add_lat(&rps_stats, rps);
+				add_lat(&rps_stats, isfinite(rps) ? rps : 0);
 
 			delta = tvdelta(&last_calc, &now);
 			if (delta >= interval_usec) {
