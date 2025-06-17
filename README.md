@@ -37,7 +37,7 @@ whoever tries to take the per-cpu lock next will have to wait until
 calculations are finished.
 
 This isn't a great model for multi-threaded programming, and it can be turned
-off with (-L / --no-locking), but it seems to be the most accurate way to match
+off with (`-L / --no-locking`), but it seems to be the most accurate way to match
 what we're seeing in the real world.
 
 ## Calibration
@@ -46,26 +46,27 @@ If the matrix math portion of a request is longer than our timeslice, the
 resulting contention will impact performance.  Two different command line
 options control how long the matrix math will take:
 
--F (--cache_footprint): cache footprint (kb, def: 256)
--n (--operations): think time operations to perform (def: 5)
+`-F, --cache-footprint <KB>`: cache footprint (def: `256`)
+`-n, --operations <N>`: think time operations to perform (def: `5`)
 
 Another important option is:
 
--C (--calibrate): run our work loop and report on timing
+`-C, --calibrate`: run our work loop and report on timing
 
 In this mode, no spinlocks are taken, and the request latency times are based
 entirely on the matrix math (no usleeps are counted).  You can use these three
 options to match the work to your desired timeslice.  The goal is to get the
-p99 of your request latency in calibration mode just under the desired
+`p99` of your request latency in calibration mode just under the desired
 timeslice.
 
 # Example runs
+
 ## Calibration run
 
 This lands at just under 20ms for the matrix math done in our request
 
-```
- ./schbench -F 256 -n 5 --calibrate -r 10
+```bash
+$ ./schbench -F 256 -n 5 --calibrate -r 10
 setting worker threads to 52
 ...
 Wakeup Latencies percentiles (usec) runtime 10 (s) (30212 total samples)
@@ -93,8 +94,9 @@ average rps: 3024.60
 This does a 90 second run using the parameters above.  The request latencies
 are a little higher because they do include the time spent on usleeps when not
 in calibration mode.
-```
-./schbench -F 256 -n 5 -r 90
+
+```bash
+$ ./schbench -F 256 -n 5 -r 90
 ...
 Wakeup Latencies percentiles (usec) runtime 90 (s) (255474 total samples)
           50.0th: 7          (66640 samples)
@@ -121,8 +123,8 @@ average rps: 3009.10
 Pipe mode uses futexes and shared memory instead of pipes, but the underlying
 idea is similar to perf bench.  Wakeup latencies are recorded.
 
-```
- ./schbench -p 65536 -t 4
+```bash
+$ ./schbench -p 65536 -t 4
 Wakeup Latencies percentiles (usec) runtime 30 (s) (2631154 total samples)
           20.0th: 6          (807309 samples)
           50.0th: 7          (1729909 samples)
@@ -132,50 +134,52 @@ Wakeup Latencies percentiles (usec) runtime 30 (s) (2631154 total samples)
           min=1, max=562
 avg worker transfer: 21924.84 ops/sec 1.34GB/s
 ```
+
 # All the options
 
--C (--calibrate): run our work loop and report on timing
+`-C, --calibrate`: run our work loop and report on timing
 Documented above
 
--L (--no-locking): don't spinlock during CPU work (def: locking on)
+`-L, --no-locking`: don't spinlock during CPU work (def: `locking on`)
 Use this if you don't want to penalize preemption.
 
--m (--message-threads): number of message threads (def: 1)
+`-m, --message-threads <N>`: number of message threads (def: `1`)
 One message thread per NUMA node seems best.
 
--t (--threads): worker threads per message thread (def: num_cpus)
+`-t, --threads <N>`: worker threads per message thread (def: `num_cpus`)
 These do all the actual work, but you shouldn't need more than num_cpus.
 
--r (--runtime): How long to run before exiting (seconds, def: 30)
+`-r, --runtime <SECONDS>`: How long to run before exiting (def: `30`)
 
--F (--cache_footprint): cache footprint (kb, def: 256)
+`-F, --cache-footprint <KB>`: cache footprint (def: `256`)
 The size of our matrix for worker thread math.
 
--n (--operations): think time operations to perform (def: 5)
+`-n, --operations <N>`: think time operations to perform (def: `5`)
 The number of times we'll loop on the matrix math in each request.
 
--s (--sleep_usec): time to sleep during each requests, in usec (def: 100)
+`-s, --sleep-usec <USEC>`: time to sleep during each requests, in usec (def: `100`)
 
--A (--auto-rps): grow RPS until cpu utilization hits target (def: none)
+`-A, --auto-rps <PERCENT>`: grow RPS until cpu utilization hits target (def: `none`)
 Instead of trying to fully saturate the system, target a specific CPU utilization percentage.
 
--p (--pipe): transfer size bytes to simulate a pipe test (def: 0)
+`-p, --pipe <BYTES>`: transfer size bytes to simulate a pipe test (def: `0`)
 perf pipe test is bottlenecked on pipes, this aims to move the bottleneck to the scheduler instead.
 
--R (--rps): requests per second mode (count, def: 0)
+`-R, --rps <COUNT>`: requests per second mode (def: `0`)
 Instead of trying to fully saturate the system, target a specific number of requests per second.
 
--w (--warmuptime): how long to warmup before resettings stats (seconds, def: 5)
+`-w, --warmuptime <SECONDS>`: how long to warmup before resettings stats (def: `5`)
 Once the workload is stabilized, we zero all the stats to get more consistent numbers.
 
--i (--intervaltime): interval for printing latencies (seconds, def: 10)
+`-i, --intervaltime <SECONDS>`: interval for printing latencies (def: `10`)
 Print a report about our latencies and RPS ever N seconds.
 
--z (--zerotime): interval for zeroing latencies (seconds, def: never)
+`-z, --zerotime <SECONDS>`: interval for zeroing latencies (def: `never`)
 Zero all of our stats on a regular basis.
 
--M (--message-cpus): list of cpus (a-n,m-z) the message threads are allowed to use, or "auto"
--W (--worker-cpus): list of cpus (a-n,m-z) the worker threads are allowed to use, or "auto"
+`-M, --message-cpus <LIST>`: list of cpus (a-n,m-z) the message threads are allowed to use, or "`auto`"
+
+`-W, --worker-cpus <LIST>`: list of cpus (a-n,m-z) the worker threads are allowed to use, or "`auto`"
 
 Each message thread is pinned to a single CPU, round robin style through the set of
 supplied CPUS.
