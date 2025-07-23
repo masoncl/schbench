@@ -238,7 +238,7 @@ static void thread_auto_pin(int m_threads, cpu_set_t *m_cpus,
 {
 	int i = 0;
 	CPU_ZERO(m_cpus);
-	for (int i = 0; i < m_threads; ++i) {
+	for (i = 0; i < m_threads; ++i) {
 		CPU_SET(i, m_cpus);
 		CPU_CLR(i, w_cpus);
 	}
