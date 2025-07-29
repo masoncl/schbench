@@ -12,7 +12,7 @@ all: $(ALL)
 %.o: %.c
 	$(CC) -o $*.o -c $(ALL_CFLAGS) $<
 
-schbench: schbench.o
+schbench: schbench.o topology.o
 	$(CC) $(ALL_CFLAGS) -o $@ $(filter %.o,$^) -lpthread -lm
 
 depend:

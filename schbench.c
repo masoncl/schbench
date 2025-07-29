@@ -31,6 +31,8 @@
 #include <sys/utsname.h>
 #include <netdb.h>
 
+#include "topology.h"
+
 #define PLAT_BITS	8
 #define PLAT_VAL	(1 << PLAT_BITS)
 #define PLAT_GROUP_NR	19
@@ -95,6 +97,10 @@ static cpu_set_t __message_cpus = { 0 };
 static cpu_set_t *worker_cpus = NULL;
 static cpu_set_t __worker_cpus = { 0 };
 
+/* CPU topology for die-aware pinning */
+static struct cpu_topology topology = { 0 };
+static cpu_set_t *per_message_thread_cpus = NULL;
+
 /*
  * one stat struct per thread data, when the workers sleep this records the
  * latency between when they are woken up and when they actually get the
@@ -127,6 +133,15 @@ enum {
 	HELP_LONG_OPT = 1,
 };
 
+enum pin_mode {
+	PIN_MODE_NONE = 0,
+	PIN_MODE_MANUAL,
+	PIN_MODE_AUTO,
+	PIN_MODE_CCX
+};
+
+static int pin_mode = PIN_MODE_NONE;
+
 char *option_string = "p:m:M:W:t:Cr:R:w:i:z:A:n:F:Lj:s:J:";
 static struct option long_options[] = {
 	{"pipe", required_argument, 0, 'p'},
@@ -147,6 +162,7 @@ static struct option long_options[] = {
 	{"zerotime", required_argument, 0, 'z'},
 	{"json", required_argument, 0, 'j'},
 	{"jobname", required_argument, 0, 'J'},
+	{"pin", required_argument, 0, 'P'},
 	{"help", no_argument, 0, HELP_LONG_OPT},
 	{0, 0, 0, 0}
 };
@@ -172,6 +188,7 @@ static void print_usage(void)
 		"\t-z (--zerotime): interval for zeroing latencies (seconds, def: never)\n"
 		"\t-j (--json) <file>: output in json format (def: false)\n"
 		"\t-J (--jobname) <name>: an optional jobname to add to the json output (def: none)\n"
+		"\t-P (--pin) ccx: pin threads to dies/chiplets (AMD CCX-aware pinning)\n"
 	       );
 	exit(1);
 }
@@ -253,6 +270,7 @@ static void parse_options(int ac, char **av)
 	int c;
 	int found_warmuptime = -1;
 	int found_auto_pin = 0;
+	int i;
 
 	while (1) {
 		int option_index = 0;
@@ -294,18 +312,24 @@ static void parse_options(int ac, char **av)
 		case 'M':
 			if (!strcmp(optarg, "auto")) {
 				found_auto_pin = 1;
+				pin_mode = PIN_MODE_AUTO;
 			} else if (!parse_cpuset(optarg, &__message_cpus)) {
 				fprintf(stderr, "failed to parse cpuset information\n");
 				exit(1);
+			} else {
+				pin_mode = PIN_MODE_MANUAL;
 			}
 			message_cpus = &__message_cpus;
 			break;
 		case 'W':
 			if (!strcmp(optarg, "auto")) {
 				found_auto_pin = 1;
+				pin_mode = PIN_MODE_AUTO;
 			} else if (!parse_cpuset(optarg, &__worker_cpus)) {
 				fprintf(stderr, "failed to parse cpuset information\n");
 				exit(1);
+			} else {
+				pin_mode = PIN_MODE_MANUAL;
 			}
 			worker_cpus = &__worker_cpus;
 			break;
@@ -347,6 +371,14 @@ static void parse_options(int ac, char **av)
 				exit(1);
 			}
 			break;
+		case 'P':
+			if (!strcmp(optarg, "ccx")) {
+				pin_mode = PIN_MODE_CCX;
+			} else {
+				fprintf(stderr, "Unknown pin mode: %s\n", optarg);
+				exit(1);
+			}
+			break;
 		case '?':
 		case HELP_LONG_OPT:
 			print_usage();
@@ -360,6 +392,30 @@ static void parse_options(int ac, char **av)
 		  &__message_cpus, &__worker_cpus);
 		worker_cpus = &__worker_cpus;
 		message_cpus = &__message_cpus;
+	}
+	
+	/* Detect topology if using CCX pinning */
+	if (pin_mode == PIN_MODE_CCX) {
+		if (detect_topology(&topology) != 0) {
+			fprintf(stderr, "Failed to detect CPU topology\n");
+			exit(1);
+		}
+		print_topology(&topology);
+		
+		/* Allocate per-message-thread CPU sets */
+		per_message_thread_cpus = calloc(message_threads, sizeof(cpu_set_t));
+		if (!per_message_thread_cpus) {
+			perror("Failed to allocate per-message-thread CPU sets");
+			exit(1);
+		}
+		
+		/* Assign message threads to dies in round-robin fashion */
+		for (i = 0; i < message_threads; i++) {
+			int die_id = i % topology.num_dies;
+			memcpy(&per_message_thread_cpus[i], &topology.dies[die_id].cpus, 
+			       sizeof(cpu_set_t));
+			print_thread_cpus("Message thread", i, &per_message_thread_cpus[i]);
+		}
 	}
 	/*
 	 * by default pipe mode zeros out some options.  This
@@ -1370,6 +1426,16 @@ static void do_work(struct thread_data *td)
 		pthread_mutex_unlock(lock);
 }
 
+static void pin_worker_cpus(cpu_set_t *worker_cpus)
+{
+	int ret;
+	pthread_t thread = pthread_self();
+	ret = pthread_setaffinity_np(thread, sizeof(cpu_set_t), worker_cpus);
+	if (ret) {
+		fprintf(stderr, "unable to set CPU affinity\n");
+	}
+}
+
 /*
  * the worker thread is pretty simple, it just does a single spin and
  * then waits on a message from the message thread
@@ -1385,6 +1451,13 @@ void *worker_thread(void *arg)
 	int ret;
 
 	td->sys_tid = get_sys_tid();
+
+	if (pin_mode == PIN_MODE_CCX) {
+		pin_worker_cpus(&per_message_thread_cpus[td->msg_thread->index]);
+		/* Workers will be pinned when they start */
+	} else if (worker_cpus) {
+		pin_worker_cpus(worker_cpus);
+	}
 
 	ret = pthread_setname_np(pthread_self(), "schbench-worker");
 	if (ret) {
@@ -1453,7 +1526,7 @@ int find_nth_set_bit(const cpu_set_t *set, int n)
 	for (int i = 0; i < CPU_SETSIZE; ++i) {
 		if (CPU_ISSET(i, set)) {
 			if (count == n)
-				return i; // Return the CPU index of the n’th set bit
+				return i; // Return the CPU index of the n'th set bit
 			++count;
 		}
 	}
@@ -1464,30 +1537,25 @@ static void pin_message_cpu(int index, cpu_set_t *possible_cpus)
 {
 	cpu_set_t cpuset;
 	int ret;
+	
 	CPU_ZERO(&cpuset);
 	int num_possible = CPU_COUNT(possible_cpus);
 	int cpu_to_set = index % num_possible;
 
+	if (pin_mode == PIN_MODE_CCX)
+		cpu_to_set = 0;
+
 	cpu_to_set = find_nth_set_bit(possible_cpus, cpu_to_set);
-	CPU_SET(cpu_to_set, &cpuset); // Pin to CPU 0
+	CPU_SET(cpu_to_set, &cpuset);
 
 	pthread_t thread = pthread_self();
 	ret = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
 	if (ret) {
-		fprintf(stderr, "unable to set CPU affinity to cpu %d\n", cpu_to_set);
+		fprintf(stderr, "unable to set CPU affinity for message thread %d\n", index);
 		exit(1);
 	}
-	fprintf(stderr, "Pinning to message thread index %d cpu %d\n", index, cpu_to_set);
-}
-
-static void pin_worker_cpus(cpu_set_t *worker_cpus)
-{
-	int ret;
-	pthread_t thread = pthread_self();
-	ret = pthread_setaffinity_np(thread, sizeof(cpu_set_t), worker_cpus);
-	if (ret) {
-		fprintf(stderr, "unable to set CPU affinity\n");
-	}
+	fprintf(stderr, "Pinning to message thread index %d cpu %d\n", 
+			index, find_nth_set_bit(&cpuset, 0));
 }
 
 /*
@@ -1515,10 +1583,6 @@ void *message_thread(void *arg)
 	}
 
 	td->sys_tid = get_sys_tid();
-
-	if (worker_cpus)
-		pin_worker_cpus(worker_cpus);
-
 	for (i = 0; i < worker_threads; i++) {
 		pthread_t tid;
 		worker_threads_mem[i].data = malloc(3 * sizeof(unsigned long) * matrix_size * matrix_size);
@@ -1528,6 +1592,7 @@ void *message_thread(void *arg)
 		}
 
 		worker_threads_mem[i].msg_thread = td;
+		worker_threads_mem[i].index = i;
 		ret = pthread_create(&tid, NULL, worker_thread,
 				     worker_threads_mem + i);
 		if (ret) {
@@ -1538,8 +1603,11 @@ void *message_thread(void *arg)
 		worker_threads_mem[i].index = i;
 	}
 
-	if (message_cpus)
+	if (pin_mode == PIN_MODE_CCX) {
+		pin_message_cpu(td->index, &per_message_thread_cpus[td->index]);;
+	} else if (message_cpus) {
 		pin_message_cpu(td->index, message_cpus);
+	}
 
 	if (requests_per_sec)
 		run_rps_thread(worker_threads_mem);
@@ -1931,6 +1999,11 @@ int main(int ac, char **av)
 	}
 	free(message_threads_mem);
 
+	/* Clean up topology structures */
+	if (pin_mode == PIN_MODE_CCX) {
+		free(per_message_thread_cpus);
+		free_topology(&topology);
+	}
 
 	return 0;
 }
