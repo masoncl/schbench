@@ -819,6 +819,9 @@ struct thread_data {
 	/* our parent thread and messaging partner */
 	struct thread_data *msg_thread;
 
+	/* if we're pinning, the CPU set to use */
+	cpu_set_t *cpus;
+
 	/*
 	 * the msg thread stuffs gtod in here before waking us, so we can
 	 * measure scheduler latency
@@ -1452,12 +1455,8 @@ void *worker_thread(void *arg)
 
 	td->sys_tid = get_sys_tid();
 
-	if (pin_mode == PIN_MODE_CCX) {
-		pin_worker_cpus(&per_message_thread_cpus[td->msg_thread->index]);
-		/* Workers will be pinned when they start */
-	} else if (worker_cpus) {
-		pin_worker_cpus(worker_cpus);
-	}
+	if (td->cpus)
+		pin_worker_cpus(td->cpus);
 
 	ret = pthread_setname_np(pthread_self(), "schbench-worker");
 	if (ret) {
@@ -1570,6 +1569,9 @@ void *message_thread(void *arg)
 	int i;
 	int ret;
 
+	if (td->cpus)
+		pin_message_cpu(td->index, td->cpus);
+
 	ret = pthread_setname_np(pthread_self(), "schbench-msg");
 	if (ret) {
 		perror("failed to set message thread name");
@@ -1593,6 +1595,12 @@ void *message_thread(void *arg)
 
 		worker_threads_mem[i].msg_thread = td;
 		worker_threads_mem[i].index = i;
+
+		if (pin_mode == PIN_MODE_CCX)
+			worker_threads_mem[i].cpus = &per_message_thread_cpus[td->index];
+		else
+			worker_threads_mem[i].cpus = worker_cpus;
+
 		ret = pthread_create(&tid, NULL, worker_thread,
 				     worker_threads_mem + i);
 		if (ret) {
@@ -1601,12 +1609,6 @@ void *message_thread(void *arg)
 		}
 		worker_threads_mem[i].tid = tid;
 		worker_threads_mem[i].index = i;
-	}
-
-	if (pin_mode == PIN_MODE_CCX) {
-		pin_message_cpu(td->index, &per_message_thread_cpus[td->index]);;
-	} else if (message_cpus) {
-		pin_message_cpu(td->index, message_cpus);
 	}
 
 	if (requests_per_sec)
@@ -1911,6 +1913,12 @@ int main(int ac, char **av)
 		int index = i * worker_threads + i;
 		struct thread_data *td = message_threads_mem + index;
 		td->index = i;
+
+		if (pin_mode == PIN_MODE_CCX) {
+			td->cpus = &per_message_thread_cpus[i];
+		} else {
+			td->cpus = message_cpus;
+		}
 		ret = pthread_create(&tid, NULL, message_thread,
 				     message_threads_mem + index);
 		if (ret) {
