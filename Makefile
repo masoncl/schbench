@@ -5,6 +5,10 @@ ALL_CFLAGS = $(CFLAGS) -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 PROGS = schbench
 ALL = $(PROGS)
 
+# Source files
+SRCS = schbench.c topology.c stats.c futex.c utils.c options.c worker.c message.c
+OBJS = $(SRCS:.c=.o)
+
 $(PROGS): | depend
 
 all: $(ALL)
@@ -12,7 +16,7 @@ all: $(ALL)
 %.o: %.c
 	$(CC) -o $*.o -c $(ALL_CFLAGS) $<
 
-schbench: schbench.o topology.o
+schbench: $(OBJS)
 	$(CC) $(ALL_CFLAGS) -o $@ $(filter %.o,$^) -lpthread -lm
 
 depend:
@@ -24,4 +28,3 @@ clean:
 ifneq ($(wildcard .depend),)
 include .depend
 endif
-
