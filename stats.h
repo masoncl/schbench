@@ -23,15 +23,15 @@ extern double plist[PLAT_LIST_MAX];
 void combine_stats(struct stats *d, struct stats *s);
 void add_lat(struct stats *s, unsigned int us);
 void show_latencies(struct stats *s, char *label, char *units,
-                   unsigned long long runtime, unsigned long mask,
-                   unsigned long star);
+		    unsigned long long runtime, unsigned long mask,
+		    unsigned long star);
 void write_json_stats(FILE *fp, struct stats *s, char *label);
 
 /* Internal histogram functions */
 unsigned int plat_val_to_idx(unsigned int val);
 unsigned int plat_idx_to_val(unsigned int idx);
 unsigned int calc_percentiles(unsigned int *io_u_plat, unsigned long nr,
-                             unsigned int **output,
-                             unsigned long **output_counts);
+			      unsigned int **output,
+			      unsigned long **output_counts);
 
 #endif /* _STATS_H */

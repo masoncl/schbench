@@ -30,8 +30,7 @@ void run_msg_thread(struct thread_data *td)
 	}
 }
 
-void auto_scale_rps(int *proc_stat_fd,
-		    unsigned long long *total_time,
+void auto_scale_rps(int *proc_stat_fd, unsigned long long *total_time,
 		    unsigned long long *total_idle)
 {
 	int fd = *proc_stat_fd;
@@ -196,7 +195,8 @@ void *message_thread(void *arg)
 	td->sys_tid = get_sys_tid();
 	for (i = 0; i < worker_threads; i++) {
 		pthread_t tid;
-		worker_threads_mem[i].data = malloc(3 * sizeof(unsigned long) * matrix_size * matrix_size);
+		worker_threads_mem[i].data = malloc(3 * sizeof(unsigned long) *
+						    matrix_size * matrix_size);
 		if (!worker_threads_mem[i].data) {
 			perror("unable to allocate ram");
 			pthread_exit((void *)-ENOMEM);
@@ -206,7 +206,8 @@ void *message_thread(void *arg)
 		worker_threads_mem[i].index = i;
 
 		if (pin_mode == PIN_MODE_CCX)
-			worker_threads_mem[i].cpus = &per_message_thread_cpus[td->index];
+			worker_threads_mem[i].cpus =
+				&per_message_thread_cpus[td->index];
 		else
 			worker_threads_mem[i].cpus = worker_cpus;
 
@@ -238,7 +239,7 @@ void *message_thread(void *arg)
  * to pull that out
  */
 void combine_message_thread_rps(struct thread_data *thread_data,
-			       unsigned long long *loop_count)
+				unsigned long long *loop_count)
 {
 	struct thread_data *worker;
 	int i;
@@ -262,8 +263,8 @@ void combine_message_thread_rps(struct thread_data *thread_data,
  * can expose problems in different parts of the wakeup paths
  */
 void collect_sched_delay(struct thread_data *thread_data,
-			unsigned long long *message_thread_delay_ret,
-			unsigned long long *worker_thread_delay_ret)
+			 unsigned long long *message_thread_delay_ret,
+			 unsigned long long *worker_thread_delay_ret)
 {
 	struct thread_data *worker;
 	unsigned long long message_thread_delay = 0;
@@ -284,14 +285,15 @@ void collect_sched_delay(struct thread_data *thread_data,
 		}
 	}
 	*message_thread_delay_ret = message_thread_delay / message_threads;
-	*worker_thread_delay_ret = worker_thread_delay / (message_threads * worker_threads);
+	*worker_thread_delay_ret =
+		worker_thread_delay / (message_threads * worker_threads);
 }
 
 void combine_message_thread_stats(struct stats *wakeup_stats,
-				 struct stats *request_stats,
-				 struct thread_data *thread_data,
-				 unsigned long long *loop_count,
-				 unsigned long long *loop_runtime)
+				  struct stats *request_stats,
+				  struct thread_data *thread_data,
+				  unsigned long long *loop_count,
+				  unsigned long long *loop_runtime)
 {
 	struct thread_data *worker;
 	int i;
@@ -325,8 +327,10 @@ void reset_thread_stats(struct thread_data *thread_data)
 		for (i = 0; i < worker_threads; i++) {
 			worker = thread_data + index++;
 			worker->avg_sched_delay = 0;
-			memset(&worker->wakeup_stats, 0, sizeof(worker->wakeup_stats));
-			memset(&worker->request_stats, 0, sizeof(worker->request_stats));
+			memset(&worker->wakeup_stats, 0,
+			       sizeof(worker->wakeup_stats));
+			memset(&worker->request_stats, 0,
+			       sizeof(worker->request_stats));
 		}
 	}
 }

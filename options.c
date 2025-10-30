@@ -42,32 +42,33 @@ enum {
 
 char *option_string = "p:m:M:W:t:Cr:R:w:i:z:A:n:F:Lj:s:J:";
 static struct option long_options[] = {
-	{"pipe", required_argument, 0, 'p'},
-	{"message-threads", required_argument, 0, 'm'},
-	{"message-cpus", required_argument, 0, 'M'},
-	{"worker-cpus", required_argument, 0, 'W'},
-	{"threads", required_argument, 0, 't'},
-	{"runtime", required_argument, 0, 'r'},
-	{"rps", required_argument, 0, 'R'},
-	{"auto-rps", required_argument, 0, 'A'},
-	{"cache_footprint", required_argument, 0, 'f'},
-	{"calibrate", no_argument, 0, 'C'},
-	{"no-locking", no_argument, 0, 'L'},
-	{"operations", required_argument, 0, 'n'},
-	{"sleep_usec", required_argument, 0, 's'},
-	{"warmuptime", required_argument, 0, 'w'},
-	{"intervaltime", required_argument, 0, 'i'},
-	{"zerotime", required_argument, 0, 'z'},
-	{"json", required_argument, 0, 'j'},
-	{"jobname", required_argument, 0, 'J'},
-	{"pin", required_argument, 0, 'P'},
-	{"help", no_argument, 0, HELP_LONG_OPT},
-	{0, 0, 0, 0}
+	{ "pipe", required_argument, 0, 'p' },
+	{ "message-threads", required_argument, 0, 'm' },
+	{ "message-cpus", required_argument, 0, 'M' },
+	{ "worker-cpus", required_argument, 0, 'W' },
+	{ "threads", required_argument, 0, 't' },
+	{ "runtime", required_argument, 0, 'r' },
+	{ "rps", required_argument, 0, 'R' },
+	{ "auto-rps", required_argument, 0, 'A' },
+	{ "cache_footprint", required_argument, 0, 'f' },
+	{ "calibrate", no_argument, 0, 'C' },
+	{ "no-locking", no_argument, 0, 'L' },
+	{ "operations", required_argument, 0, 'n' },
+	{ "sleep_usec", required_argument, 0, 's' },
+	{ "warmuptime", required_argument, 0, 'w' },
+	{ "intervaltime", required_argument, 0, 'i' },
+	{ "zerotime", required_argument, 0, 'z' },
+	{ "json", required_argument, 0, 'j' },
+	{ "jobname", required_argument, 0, 'J' },
+	{ "pin", required_argument, 0, 'P' },
+	{ "help", no_argument, 0, HELP_LONG_OPT },
+	{ 0, 0, 0, 0 }
 };
 
 void print_usage(void)
 {
-	fprintf(stderr, "schbench usage:\n"
+	fprintf(stderr,
+		"schbench usage:\n"
 		"\t-C (--calibrate): run our work loop and report on timing\n"
 		"\t-L (--no-locking): don't spinlock during CPU work (def: locking on)\n"
 		"\t-m (--message-threads): number of message threads (def: 1)\n"
@@ -86,8 +87,7 @@ void print_usage(void)
 		"\t-z (--zerotime): interval for zeroing latencies (seconds, def: never)\n"
 		"\t-j (--json) <file>: output in json format (def: false)\n"
 		"\t-J (--jobname) <name>: an optional jobname to add to the json output (def: none)\n"
-		"\t-P (--pin) ccx: pin threads to dies/chiplets (AMD CCX-aware pinning)\n"
-	       );
+		"\t-P (--pin) ccx: pin threads to dies/chiplets (AMD CCX-aware pinning)\n");
 	exit(1);
 }
 
@@ -148,8 +148,7 @@ int parse_cpuset(const char *str, cpu_set_t *cpuset)
  *  give each message thread its own CPU
  *  give each worker thread all of the remaining CPUs
  */
-static void thread_auto_pin(int m_threads, cpu_set_t *m_cpus,
-			     cpu_set_t *w_cpus)
+static void thread_auto_pin(int m_threads, cpu_set_t *m_cpus, cpu_set_t *w_cpus)
 {
 	int i = 0;
 	CPU_ZERO(m_cpus);
@@ -173,13 +172,13 @@ void parse_options(int ac, char **av)
 	while (1) {
 		int option_index = 0;
 
-		c = getopt_long(ac, av, option_string,
-				long_options, &option_index);
+		c = getopt_long(ac, av, option_string, long_options,
+				&option_index);
 
 		if (c == -1)
 			break;
 
-		switch(c) {
+		switch (c) {
 		case 'C':
 			calibrate_only = 1;
 			break;
@@ -212,7 +211,8 @@ void parse_options(int ac, char **av)
 				found_auto_pin = 1;
 				pin_mode = PIN_MODE_AUTO;
 			} else if (!parse_cpuset(optarg, &__message_cpus)) {
-				fprintf(stderr, "failed to parse cpuset information\n");
+				fprintf(stderr,
+					"failed to parse cpuset information\n");
 				exit(1);
 			} else {
 				pin_mode = PIN_MODE_MANUAL;
@@ -224,7 +224,8 @@ void parse_options(int ac, char **av)
 				found_auto_pin = 1;
 				pin_mode = PIN_MODE_AUTO;
 			} else if (!parse_cpuset(optarg, &__worker_cpus)) {
-				fprintf(stderr, "failed to parse cpuset information\n");
+				fprintf(stderr,
+					"failed to parse cpuset information\n");
 				exit(1);
 			} else {
 				pin_mode = PIN_MODE_MANUAL;
@@ -273,7 +274,8 @@ void parse_options(int ac, char **av)
 			if (!strcmp(optarg, "ccx")) {
 				pin_mode = PIN_MODE_CCX;
 			} else {
-				fprintf(stderr, "Unknown pin mode: %s\n", optarg);
+				fprintf(stderr, "Unknown pin mode: %s\n",
+					optarg);
 				exit(1);
 			}
 			break;
@@ -286,12 +288,12 @@ void parse_options(int ac, char **av)
 		}
 	}
 	if (found_auto_pin) {
-		thread_auto_pin(message_threads,
-		  &__message_cpus, &__worker_cpus);
+		thread_auto_pin(message_threads, &__message_cpus,
+				&__worker_cpus);
 		worker_cpus = &__worker_cpus;
 		message_cpus = &__message_cpus;
 	}
-	
+
 	/* Detect topology if using CCX pinning */
 	if (pin_mode == PIN_MODE_CCX) {
 		if (detect_topology(&topology) != 0) {
@@ -299,20 +301,22 @@ void parse_options(int ac, char **av)
 			exit(1);
 		}
 		print_topology(&topology);
-		
+
 		/* Allocate per-message-thread CPU sets */
-		per_message_thread_cpus = calloc(message_threads, sizeof(cpu_set_t));
+		per_message_thread_cpus =
+			calloc(message_threads, sizeof(cpu_set_t));
 		if (!per_message_thread_cpus) {
 			perror("Failed to allocate per-message-thread CPU sets");
 			exit(1);
 		}
-		
+
 		/* Assign message threads to dies in round-robin fashion */
 		for (i = 0; i < message_threads; i++) {
 			int die_id = i % topology.num_dies;
-			memcpy(&per_message_thread_cpus[i], &topology.dies[die_id].cpus, 
-			       sizeof(cpu_set_t));
-			print_thread_cpus("Message thread", i, &per_message_thread_cpus[i]);
+			memcpy(&per_message_thread_cpus[i],
+			       &topology.dies[die_id].cpus, sizeof(cpu_set_t));
+			print_thread_cpus("Message thread", i,
+					  &per_message_thread_cpus[i]);
 		}
 	}
 	/*

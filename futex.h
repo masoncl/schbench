@@ -8,8 +8,8 @@
 #include <time.h>
 
 /* Futex wrapper functions */
-int futex(int *uaddr, int futex_op, int val,
-          const struct timespec *timeout, int *uaddr2, int val3);
+int futex(int *uaddr, int futex_op, int val, const struct timespec *timeout,
+	  int *uaddr2, int val3);
 void fpost(int *futexp);
 int fwait(int *futexp, struct timespec *timeout);
 

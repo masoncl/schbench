@@ -22,11 +22,11 @@
 #include <sys/types.h>
 #include <linux/futex.h>
 
-#define PLAT_BITS	8
-#define PLAT_VAL	(1 << PLAT_BITS)
-#define PLAT_GROUP_NR	19
-#define PLAT_NR		(PLAT_GROUP_NR * PLAT_VAL)
-#define PLAT_LIST_MAX	20
+#define PLAT_BITS 8
+#define PLAT_VAL (1 << PLAT_BITS)
+#define PLAT_GROUP_NR 19
+#define PLAT_NR (PLAT_GROUP_NR * PLAT_VAL)
+#define PLAT_LIST_MAX 20
 
 /* when -p is on, how much do we send back and forth */
 #define PIPE_TRANSFER_BUFFER (1 * 1024 * 1024)
@@ -157,11 +157,11 @@ struct thread_data {
 
 /* Architecture-specific nop instruction */
 #if defined(__x86_64__) || defined(__i386__)
-#define nop __asm__ __volatile__("rep;nop": : :"memory")
+#define nop __asm__ __volatile__("rep;nop" : : : "memory")
 #elif defined(__aarch64__)
 #define nop __asm__ __volatile__("yield" ::: "memory")
 #elif defined(__powerpc64__)
-#define nop __asm__ __volatile__("nop": : :"memory")
+#define nop __asm__ __volatile__("nop" : : : "memory")
 #else
 #error Unsupported architecture
 #endif

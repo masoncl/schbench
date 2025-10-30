@@ -5,8 +5,8 @@
 #include <string.h>
 #include "futex.h"
 
-int futex(int *uaddr, int futex_op, int val,
-          const struct timespec *timeout, int *uaddr2, int val3)
+int futex(int *uaddr, int futex_op, int val, const struct timespec *timeout,
+	  int *uaddr2, int val3)
 {
 	return syscall(SYS_futex, uaddr, futex_op, val, timeout, uaddr2, val3);
 }
@@ -22,7 +22,7 @@ void fpost(int *futexp)
 	if (__sync_bool_compare_and_swap(futexp, FUTEX_BLOCKED,
 					 FUTEX_RUNNING)) {
 		s = futex(futexp, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);
-		if (s  == -1) {
+		if (s == -1) {
 			perror("FUTEX_WAKE");
 			exit(1);
 		}
@@ -43,10 +43,11 @@ int fwait(int *futexp, struct timespec *timeout)
 		/* Is the futex available? */
 		if (__sync_bool_compare_and_swap(futexp, FUTEX_RUNNING,
 						 FUTEX_BLOCKED)) {
-			break;      /* Yes */
+			break; /* Yes */
 		}
 		/* Futex is not available; wait */
-		s = futex(futexp, FUTEX_WAIT_PRIVATE, FUTEX_BLOCKED, timeout, NULL, 0);
+		s = futex(futexp, FUTEX_WAIT_PRIVATE, FUTEX_BLOCKED, timeout,
+			  NULL, 0);
 		if (s == -1 && errno != EAGAIN) {
 			if (errno == ETIMEDOUT)
 				return -ETIMEDOUT;
@@ -127,7 +128,7 @@ struct request *request_splice(struct thread_data *head)
 			break;
 	}
 
-	while(ret) {
+	while (ret) {
 		struct request *tmp = ret;
 		ret = ret->next;
 		tmp->next = reverse;

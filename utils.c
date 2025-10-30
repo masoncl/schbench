@@ -21,7 +21,8 @@ void tvsub(struct timeval *tdiff, struct timeval *t1, struct timeval *t0)
 		tdiff->tv_sec--;
 		tdiff->tv_usec += USEC_PER_SEC;
 		if (tdiff->tv_usec < 0) {
-			fprintf(stderr, "lat_fs: tvsub shows test time ran backwards!\n");
+			fprintf(stderr,
+				"lat_fs: tvsub shows test time ran backwards!\n");
 			exit(1);
 		}
 	}
@@ -93,8 +94,7 @@ unsigned long long read_sched_delay(pid_t tid)
  * read /proc/stat, return the percentage of non-idle time since
  * the last read.
  */
-float read_busy(int fd, char *buf, int len,
-		unsigned long long *total_time_ret,
+float read_busy(int fd, char *buf, int len, unsigned long long *total_time_ret,
 		unsigned long long *idle_time_ret)
 {
 	unsigned long long total_time = 0;
@@ -112,7 +112,7 @@ float read_busy(int fd, char *buf, int len,
 		perror("lseek");
 		exit(1);
 	}
-	ret = read(fd, buf, len-1);
+	ret = read(fd, buf, len - 1);
 	if (ret < 0) {
 		perror("failed to read /proc/stat");
 		exit(1);
@@ -157,7 +157,7 @@ float read_busy(int fd, char *buf, int len,
 	*total_time_ret = total_time;
 	*idle_time_ret = idle_time;
 
-	return 100.00 - ((float)delta_idle/(float)delta) * 100.00;
+	return 100.00 - ((float)delta_idle / (float)delta) * 100.00;
 }
 
 int find_nth_set_bit(const cpu_set_t *set, int n)
@@ -187,7 +187,7 @@ void pin_message_cpu(int index, cpu_set_t *possible_cpus)
 {
 	cpu_set_t cpuset;
 	int ret;
-	
+
 	CPU_ZERO(&cpuset);
 	int num_possible = CPU_COUNT(possible_cpus);
 	int cpu_to_set = index % num_possible;
@@ -201,11 +201,13 @@ void pin_message_cpu(int index, cpu_set_t *possible_cpus)
 	pthread_t thread = pthread_self();
 	ret = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
 	if (ret) {
-		fprintf(stderr, "unable to set CPU affinity for message thread %d\n", index);
+		fprintf(stderr,
+			"unable to set CPU affinity for message thread %d\n",
+			index);
 		exit(1);
 	}
-	fprintf(stderr, "Pinning to message thread index %d cpu %d\n", 
-			index, find_nth_set_bit(&cpuset, 0));
+	fprintf(stderr, "Pinning to message thread index %d cpu %d\n", index,
+		find_nth_set_bit(&cpuset, 0));
 }
 
 /*
@@ -313,7 +315,8 @@ void chomp(char *buf)
 	if (max == 0)
 		return;
 
-	while (index && isspace(buf[index])) index--;
+	while (index && isspace(buf[index]))
+		index--;
 	index++;
 	buf[index] = '\0';
 }
@@ -403,13 +406,13 @@ void write_json_footer(FILE *fp)
 	fflush(fp);
 }
 
-static char *units[] = { "B", "KB", "MB", "GB", "TB", "PB", "EB", NULL};
+static char *units[] = { "B", "KB", "MB", "GB", "TB", "PB", "EB", NULL };
 
 double pretty_size(double number, char **str)
 {
 	int divs = 0;
 
-	while(number >= 1024) {
+	while (number >= 1024) {
 		if (units[divs + 1] == NULL)
 			break;
 		divs++;

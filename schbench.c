@@ -59,7 +59,7 @@ static void sleep_for_runtime(struct thread_data *message_threads_mem)
 	last_rps_calc = start;
 	zero_time = start;
 
-	while(!done) {
+	while (!done) {
 		gettimeofday(&now, NULL);
 		runtime_delta = tvdelta(&start, &now);
 
@@ -67,8 +67,7 @@ static void sleep_for_runtime(struct thread_data *message_threads_mem)
 			done = 1;
 
 		if (!requests_per_sec && !pipe_test &&
-		    runtime_delta > warmup_usec &&
-		    !warmup_done && warmuptime) {
+		    runtime_delta > warmup_usec && !warmup_done && warmuptime) {
 			warmup_done = 1;
 			fprintf(stderr, "warmup done, zeroing stats\n");
 			zero_time = now;
@@ -79,8 +78,11 @@ static void sleep_for_runtime(struct thread_data *message_threads_mem)
 			/* count our RPS every round */
 			delta = tvdelta(&last_rps_calc, &now);
 
-			combine_message_thread_rps(message_threads_mem, &loop_count);
-			rps = (double)((loop_count - last_loop_count) * USEC_PER_SEC) / delta;
+			combine_message_thread_rps(message_threads_mem,
+						   &loop_count);
+			rps = (double)((loop_count - last_loop_count) *
+				       USEC_PER_SEC) /
+			      delta;
 			last_loop_count = loop_count;
 			last_rps_calc = now;
 
@@ -154,12 +156,15 @@ int main(int ac, char **av)
 	if (worker_threads == 0) {
 		unsigned long num_cpus = get_nprocs();
 
-		worker_threads = (num_cpus + message_threads - 1) / message_threads;
+		worker_threads =
+			(num_cpus + message_threads - 1) / message_threads;
 
-		fprintf(stderr, "setting worker threads to %d\n", worker_threads);
+		fprintf(stderr, "setting worker threads to %d\n",
+			worker_threads);
 	}
 
-	matrix_size = sqrt(cache_footprint_kb * 1024 / 3 / sizeof(unsigned long));
+	matrix_size =
+		sqrt(cache_footprint_kb * 1024 / 3 / sizeof(unsigned long));
 
 	num_cpu_locks = get_nprocs();
 	per_cpu_locks = calloc(num_cpu_locks, sizeof(struct per_cpu_lock));
@@ -184,8 +189,9 @@ int main(int ac, char **av)
 	memset(&request_stats, 0, sizeof(request_stats));
 	memset(&rps_stats, 0, sizeof(rps_stats));
 
-	message_threads_mem = calloc(message_threads * worker_threads + message_threads,
-				      sizeof(struct thread_data));
+	message_threads_mem =
+		calloc(message_threads * worker_threads + message_threads,
+		       sizeof(struct thread_data));
 
 	if (!message_threads_mem) {
 		perror("unable to allocate message threads");
@@ -223,8 +229,8 @@ int main(int ac, char **av)
 	memset(&wakeup_stats, 0, sizeof(wakeup_stats));
 	memset(&request_stats, 0, sizeof(request_stats));
 	combine_message_thread_stats(&wakeup_stats, &request_stats,
-				     message_threads_mem,
-				     &loop_count, &loop_runtime);
+				     message_threads_mem, &loop_count,
+				     &loop_runtime);
 
 	loops_per_sec = loop_count * USEC_PER_SEC;
 	loops_per_sec /= loop_runtime;
@@ -247,8 +253,7 @@ int main(int ac, char **av)
 			write_json_stats(outfile, &request_stats,
 					 "request_latency");
 			fprintf(outfile, ", ");
-			write_json_stats(outfile, &rps_stats,
-					 "rps");
+			write_json_stats(outfile, &rps_stats, "rps");
 		}
 		fprintf(outfile, ", \"runtime\": %u", runtime);
 		write_json_footer(outfile);
@@ -260,13 +265,14 @@ int main(int ac, char **av)
 		char *pretty;
 		double mb_per_sec;
 
-		show_latencies(&wakeup_stats, "Wakeup Latencies", "usec", runtime,
-			       PLIST_20 | PLIST_FOR_LAT, PLIST_99);
+		show_latencies(&wakeup_stats, "Wakeup Latencies", "usec",
+			       runtime, PLIST_20 | PLIST_FOR_LAT, PLIST_99);
 
-		mb_per_sec = (loop_count * pipe_test * USEC_PER_SEC) / loop_runtime;
+		mb_per_sec =
+			(loop_count * pipe_test * USEC_PER_SEC) / loop_runtime;
 		mb_per_sec = pretty_size(mb_per_sec, &pretty);
 		fprintf(stderr, "avg worker transfer: %.2f ops/sec %.2f%s/s\n",
-		       loops_per_sec, mb_per_sec, pretty);
+			loops_per_sec, mb_per_sec, pretty);
 	} else {
 		unsigned long long message_thread_delay, worker_thread_delay;
 		show_latencies(&wakeup_stats, "Wakeup Latencies", "usec",

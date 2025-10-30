@@ -16,7 +16,7 @@ unsigned int plat_val_to_idx(unsigned int val)
 	if (val == 0)
 		msb = 0;
 	else
-		msb = sizeof(val)*8 - __builtin_clz(val) - 1;
+		msb = sizeof(val) * 8 - __builtin_clz(val) - 1;
 
 	/*
 	 * MSB <= (PLAT_BITS-1), cannot be rounded off. Use
@@ -38,8 +38,8 @@ unsigned int plat_val_to_idx(unsigned int val)
 	offset = (PLAT_VAL - 1) & (val >> error_bits);
 
 	/* Make sure the index does not exceed (array size - 1) */
-	return (base + offset) < (PLAT_NR - 1) ?
-		(base + offset) : (PLAT_NR - 1);
+	return (base + offset) < (PLAT_NR - 1) ? (base + offset) :
+						 (PLAT_NR - 1);
 }
 
 /*
@@ -72,8 +72,8 @@ unsigned int plat_idx_to_val(unsigned int idx)
 }
 
 unsigned int calc_percentiles(unsigned int *io_u_plat, unsigned long nr,
-			     unsigned int **output,
-			     unsigned long **output_counts)
+			      unsigned int **output,
+			      unsigned long **output_counts)
 {
 	unsigned long sum = 0;
 	unsigned int len, i, j = 0;
@@ -99,8 +99,11 @@ unsigned int calc_percentiles(unsigned int *io_u_plat, unsigned long nr,
 		while (sum >= (plist[j] / 100.0 * nr)) {
 			if (j == oval_len) {
 				oval_len += 100;
-				ovals = realloc(ovals, oval_len * sizeof(unsigned int));
-				ocounts = realloc(ocounts, oval_len * sizeof(unsigned long));
+				ovals = realloc(
+					ovals, oval_len * sizeof(unsigned int));
+				ocounts = realloc(
+					ocounts,
+					oval_len * sizeof(unsigned long));
 			}
 
 			ovals[j] = plat_idx_to_val(i);
@@ -122,8 +125,8 @@ unsigned int calc_percentiles(unsigned int *io_u_plat, unsigned long nr,
 }
 
 void show_latencies(struct stats *s, char *label, char *units,
-		   unsigned long long runtime, unsigned long mask,
-		   unsigned long star)
+		    unsigned long long runtime, unsigned long mask,
+		    unsigned long star)
 {
 	unsigned int *ovals = NULL;
 	unsigned long *ocounts = NULL;
@@ -131,15 +134,16 @@ void show_latencies(struct stats *s, char *label, char *units,
 
 	len = calc_percentiles(s->plat, s->nr_samples, &ovals, &ocounts);
 	if (len) {
-		fprintf(stderr, "%s percentiles (%s) runtime %llu (s) (%lu total samples)\n",
+		fprintf(stderr,
+			"%s percentiles (%s) runtime %llu (s) (%lu total samples)\n",
 			label, units, runtime, s->nr_samples);
 		for (i = 0; i < len; i++) {
 			unsigned long bit = 1 << i;
 			if (!(mask & bit))
 				continue;
 			fprintf(stderr, "\t%s%2.1fth: %-10u (%lu samples)\n",
-				bit == star ? "* " : "  ",
-				plist[i], ovals[i], ocounts[i]);
+				bit == star ? "* " : "  ", plist[i], ovals[i],
+				ocounts[i]);
 		}
 	}
 
@@ -162,7 +166,8 @@ void write_json_stats(FILE *fp, struct stats *s, char *label)
 		for (i = 0; i < len; i++) {
 			if (i)
 				fprintf(fp, ", ");
-			fprintf(fp, "\"%s_pct%2.1f\": %u", label, plist[i], ovals[i]);
+			fprintf(fp, "\"%s_pct%2.1f\": %u", label, plist[i],
+				ovals[i]);
 		}
 		fprintf(fp, ", \"%s_min\": %u,", label, s->min);
 		fprintf(fp, "\"%s_max\": %u", label, s->max);

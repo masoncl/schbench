@@ -13,9 +13,8 @@ unsigned long long tvdelta(struct timeval *start, struct timeval *stop);
 /* System utilities */
 unsigned long get_sys_tid(void);
 unsigned long long read_sched_delay(pid_t tid);
-float read_busy(int fd, char *buf, int len,
-                unsigned long long *total_time_ret,
-                unsigned long long *idle_time_ret);
+float read_busy(int fd, char *buf, int len, unsigned long long *total_time_ret,
+		unsigned long long *idle_time_ret);
 
 /* CPU affinity */
 int find_nth_set_bit(const cpu_set_t *set, int n);

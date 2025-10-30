@@ -85,7 +85,7 @@ void *worker_thread(void *arg)
 		exit(1);
 	}
 	gettimeofday(&start, NULL);
-	while(1) {
+	while (1) {
 		if (stopping)
 			break;
 
