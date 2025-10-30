@@ -185,3 +185,17 @@ sets are allowed to overlap.
 
 If auto pinning mode is used, each message thread is pinned to a single CPU,
 starting with CPU 0.  Worker threads are pinned to all of the remaining CPUs.
+
+-P (--pin) ccx: CCX-aware pinning for AMD processors with multiple dies/chiplets
+
+This mode automatically detects CPU topology from sysfs and pins threads at the
+die/chiplet level.  Message threads are assigned to dies in round-robin fashion,
+with each message thread pinned to the first CPU of its assigned die.  Worker
+threads for each message thread are pinned to all CPUs within that same die.
+
+This keeps message-worker communication within a single CCX/chiplet, optimizing
+L3 cache sharing and reducing inter-die latency across AMD's Infinity Fabric.
+
+Example on a 2-die AMD system:
+  Message thread 0 -> Die 0 (all worker threads use CPUs from Die 0)
+  Message thread 1 -> Die 1 (all worker threads use CPUs from Die 1)
