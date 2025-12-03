@@ -75,12 +75,20 @@ static int skip_locking = 0;
 static char *json_file = NULL;
 /* -J, jobname */
 static char *jobname = NULL;
+/* --split, percentage of cache footprint that is private per thread */
+static int split_percent = 0;
+static int split_specified = 0;
 
 /* the message threads flip this to true when they decide runtime is up */
 static volatile unsigned long stopping = 0;
 
 /* size of matrices to multiply */
 static unsigned long matrix_size = 0;
+/* shared and private matrix sizes when using --split */
+static unsigned long shared_matrix_size = 0;
+static unsigned long private_matrix_size = 0;
+/* shared data for all threads when using --split */
+static unsigned long *shared_data = NULL;
 
 struct per_cpu_lock {
 	pthread_mutex_t lock;
@@ -147,6 +155,7 @@ static struct option long_options[] = {
 	{"zerotime", required_argument, 0, 'z'},
 	{"json", required_argument, 0, 'j'},
 	{"jobname", required_argument, 0, 'J'},
+	{"split", required_argument, 0, 'S'},
 	{"help", no_argument, 0, HELP_LONG_OPT},
 	{0, 0, 0, 0}
 };
@@ -172,6 +181,7 @@ static void print_usage(void)
 		"\t-z (--zerotime): interval for zeroing latencies (seconds, def: never)\n"
 		"\t-j (--json) <file>: output in json format (def: false)\n"
 		"\t-J (--jobname) <name>: an optional jobname to add to the json output (def: none)\n"
+		"\t--split <percent>: percent of cache footprint that is private per thread (0-100, def: all private)\n"
 	       );
 	exit(1);
 }
@@ -346,6 +356,14 @@ static void parse_options(int ac, char **av)
 				perror("strdup");
 				exit(1);
 			}
+			break;
+		case 'S':
+			split_percent = atoi(optarg);
+			if (split_percent < 0 || split_percent > 100) {
+				fprintf(stderr, "split must be between 0 and 100\n");
+				exit(1);
+			}
+			split_specified = 1;
 			break;
 		case '?':
 		case HELP_LONG_OPT:
@@ -1298,23 +1316,23 @@ static void run_rps_thread(struct thread_data *worker_threads_mem)
 /*
  * multiply two matrices in a naive way to emulate some cache footprint
  */
-static void do_some_math(struct thread_data *thread_data)
+static void do_some_math(unsigned long *data, unsigned long msize)
 {
 	unsigned long i, j, k;
 	unsigned long *m1, *m2, *m3;
 
-	m1 = &thread_data->data[0];
-	m2 = &thread_data->data[matrix_size * matrix_size];
-	m3 = &thread_data->data[2 * matrix_size * matrix_size];
+	m1 = &data[0];
+	m2 = &data[msize * msize];
+	m3 = &data[2 * msize * msize];
 
-	for (i = 0; i < matrix_size; i++) {
-		for (j = 0; j < matrix_size; j++) {
-			m3[i * matrix_size + j] = 0;
+	for (i = 0; i < msize; i++) {
+		for (j = 0; j < msize; j++) {
+			m3[i * msize + j] = 0;
 
-			for (k = 0; k < matrix_size; k++)
-				m3[i * matrix_size + j] +=
-					m1[i * matrix_size + k] *
-					m2[k * matrix_size + j];
+			for (k = 0; k < msize; k++)
+				m3[i * msize + j] +=
+					m1[i * msize + k] *
+					m2[k * msize + j];
 		}
 	}
 }
@@ -1362,12 +1380,34 @@ static void do_work(struct thread_data *td)
 {
 	pthread_mutex_t *lock = NULL;
 	unsigned long i;
+	unsigned long ops_shared, ops_private;
 
 	/* using --calibrate or --no-locking skips the locks */
 	if (!skip_locking)
 		lock = lock_this_cpu();
-	for (i = 0; i < operations; i++)
-		do_some_math(td);
+
+	/* Calculate operations split between shared and private data */
+	if (split_specified) {
+		ops_private = (operations * split_percent) / 100;
+		ops_shared = operations - ops_private;
+
+		/* Do operations on shared data */
+		if (shared_matrix_size > 0 && ops_shared > 0) {
+			for (i = 0; i < ops_shared; i++)
+				do_some_math(shared_data, shared_matrix_size);
+		}
+
+		/* Do operations on private data */
+		if (private_matrix_size > 0 && ops_private > 0) {
+			for (i = 0; i < ops_private; i++)
+				do_some_math(td->data, private_matrix_size);
+		}
+	} else {
+		/* Legacy behavior: if no split specified, use old matrix_size */
+		for (i = 0; i < operations; i++)
+			do_some_math(td->data, matrix_size);
+	}
+
 	if (!skip_locking)
 		pthread_mutex_unlock(lock);
 }
@@ -1523,7 +1563,15 @@ void *message_thread(void *arg)
 
 	for (i = 0; i < worker_threads; i++) {
 		pthread_t tid;
-		worker_threads_mem[i].data = malloc(3 * sizeof(unsigned long) * matrix_size * matrix_size);
+		unsigned long alloc_size;
+
+		/* Allocate based on private_matrix_size if using split, else use matrix_size */
+		if (private_matrix_size > 0)
+			alloc_size = private_matrix_size;
+		else
+			alloc_size = matrix_size;
+
+		worker_threads_mem[i].data = malloc(3 * sizeof(unsigned long) * alloc_size * alloc_size);
 		if (!worker_threads_mem[i].data) {
 			perror("unable to allocate ram");
 			pthread_exit((void *)-ENOMEM);
@@ -1806,7 +1854,31 @@ int main(int ac, char **av)
 		fprintf(stderr, "setting worker threads to %d\n", worker_threads);
 	}
 
-	matrix_size = sqrt(cache_footprint_kb * 1024 / 3 / sizeof(unsigned long));
+	/* Calculate matrix sizes based on split percentage */
+	if (split_specified) {
+		unsigned long shared_cache_kb = (cache_footprint_kb * (100 - split_percent)) / 100;
+		unsigned long private_cache_kb = (cache_footprint_kb * split_percent) / 100;
+
+		shared_matrix_size = sqrt(shared_cache_kb * 1024 / 3 / sizeof(unsigned long));
+		private_matrix_size = sqrt(private_cache_kb * 1024 / 3 / sizeof(unsigned long));
+
+		fprintf(stderr, "split mode: %d%% private (%lu KB per thread), %d%% shared (%lu KB total)\n",
+			split_percent, private_cache_kb, 100 - split_percent, shared_cache_kb);
+		fprintf(stderr, "matrix sizes: private=%lu, shared=%lu\n",
+			private_matrix_size, shared_matrix_size);
+
+		/* Allocate shared data if needed */
+		if (shared_matrix_size > 0) {
+			shared_data = malloc(3 * sizeof(unsigned long) * shared_matrix_size * shared_matrix_size);
+			if (!shared_data) {
+				perror("unable to allocate shared data");
+				exit(1);
+			}
+		}
+	} else {
+		/* Legacy behavior: no split, all private */
+		matrix_size = sqrt(cache_footprint_kb * 1024 / 3 / sizeof(unsigned long));
+	}
 
 	num_cpu_locks = get_nprocs();
 	per_cpu_locks = calloc(num_cpu_locks, sizeof(struct per_cpu_lock));
@@ -1932,7 +2004,8 @@ int main(int ac, char **av)
 			worker_thread_delay / 1000);
 	}
 	free(message_threads_mem);
-
+	if (shared_data)
+		free(shared_data);
 
 	return 0;
 }

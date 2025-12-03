@@ -157,6 +157,9 @@ The size of our matrix for worker thread math.
 `-n, --operations <N>`: think time operations to perform (def: `5`)
 The number of times we'll loop on the matrix math in each request.
 
+`--split <PERCENT>`: percent of cache footprint that is private per thread (def: `all private`)
+Split the cache footprint between shared and private working sets. The percentage represents how much is private per thread, with the remainder shared across all threads. For example, `--split 30` means 30% private, 70% shared. When not specified, all data is private per thread (original behavior). Useful for testing scheduler behavior with both shared state (causing cache line bouncing) and thread-local data.
+
 `-s, --sleep-usec <USEC>`: time to sleep during each requests, in usec (def: `100`)
 
 `-A, --auto-rps <PERCENT>`: grow RPS until cpu utilization hits target (def: `none`)
