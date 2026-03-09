@@ -24,6 +24,7 @@
 #include <string.h>
 #include <math.h>
 #include <linux/futex.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sys/sysinfo.h>
@@ -1541,6 +1542,7 @@ void *message_thread(void *arg)
 {
 	struct thread_data *td = arg;
 	struct thread_data *worker_threads_mem = NULL;
+	unsigned long alloc_size;
 	int i;
 	int ret;
 
@@ -1561,18 +1563,19 @@ void *message_thread(void *arg)
 	if (worker_cpus)
 		pin_worker_cpus(worker_cpus);
 
+	/* Allocate based on private_matrix_size if using split, else use matrix_size */
+	if (private_matrix_size > 0)
+		alloc_size = private_matrix_size;
+	else
+		alloc_size = matrix_size;
+	alloc_size = 3 * sizeof(unsigned long) * alloc_size * alloc_size;
+
 	for (i = 0; i < worker_threads; i++) {
 		pthread_t tid;
-		unsigned long alloc_size;
 
-		/* Allocate based on private_matrix_size if using split, else use matrix_size */
-		if (private_matrix_size > 0)
-			alloc_size = private_matrix_size;
-		else
-			alloc_size = matrix_size;
-
-		worker_threads_mem[i].data = malloc(3 * sizeof(unsigned long) * alloc_size * alloc_size);
-		if (!worker_threads_mem[i].data) {
+		worker_threads_mem[i].data = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE,
+						  MAP_PRIVATE | MAP_ANON | MAP_POPULATE, -1, 0);
+		if (worker_threads_mem[i].data == MAP_FAILED) {
 			perror("unable to allocate ram");
 			pthread_exit((void *)-ENOMEM);
 		}
@@ -1858,6 +1861,7 @@ int main(int ac, char **av)
 	if (split_specified) {
 		unsigned long shared_cache_kb = (cache_footprint_kb * (100 - split_percent)) / 100;
 		unsigned long private_cache_kb = (cache_footprint_kb * split_percent) / 100;
+		unsigned long alloc_size;
 
 		shared_matrix_size = sqrt(shared_cache_kb * 1024 / 3 / sizeof(unsigned long));
 		private_matrix_size = sqrt(private_cache_kb * 1024 / 3 / sizeof(unsigned long));
@@ -1869,8 +1873,10 @@ int main(int ac, char **av)
 
 		/* Allocate shared data if needed */
 		if (shared_matrix_size > 0) {
-			shared_data = malloc(3 * sizeof(unsigned long) * shared_matrix_size * shared_matrix_size);
-			if (!shared_data) {
+			alloc_size = 3 * sizeof(unsigned long) * shared_matrix_size * shared_matrix_size;
+			shared_data = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE,
+						  MAP_PRIVATE | MAP_ANON | MAP_POPULATE, -1, 0);
+			if (shared_data == MAP_FAILED) {
 				perror("unable to allocate shared data");
 				exit(1);
 			}
