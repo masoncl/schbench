@@ -1644,7 +1644,7 @@ int main(int ac, char **av)
 
 	matrix_size = sqrt(cache_footprint_kb * 1024 / 3 / sizeof(unsigned long));
 
-	num_cpu_locks = get_nprocs();
+	num_cpu_locks = get_nprocs_conf();
 	per_cpu_locks = calloc(num_cpu_locks, sizeof(struct per_cpu_lock));
 	if (!per_cpu_locks) {
 		perror("unable to allocate memory for per cpu locks\n");
